@@ -7,9 +7,10 @@ import pandas as pd
 
 # 전역 변수로 df 선언
 df = None
+frequency = 0
 
 def choose_csv_file():
-    global df
+    global df, frequency
     
     # 파일 대화상자를 통해 CSV 파일 선택
     file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
@@ -70,27 +71,49 @@ def choose_csv_file():
                 list_boxes[title] = list_box  # LabelFrame에 대한 딕셔너리 키 설정
                 show_data(title, list_box)  # 데이터를 초기에 출력
                     
-            def create_and_save_graph(df, x_column, y_column, category):
-                # 필터링: 선택한 카테고리를 기반으로 데이터 필터링
-                filtered_data = df[(df['TEST_NAME'] == category[0]) & (df['PKT_TYPE'] == category[1])]
-                print(filtered_data)
+            def create_and_save_graph(df, x_column1, x_column2, y_column, output_directory, category):
+                test_name, pkt_type = category.split('@')  # @를 기준으로 카테고리를 테스트 이름과 패킷 유형으로 분리
+                filtered_data = df[(df['TEST_NAME'] == test_name) & (df['PKT_TYPE'] == pkt_type)]
+
                 if len(filtered_data) == 0:
                     print(f"No data for category: {category}")
                     return
-                
-                # 그래프 생성
-                plt.figure()
-                plt.scatter(filtered_data[x_column], filtered_data[y_column])
-                plt.title(f"Category: {category[0]} @ {category[1]}")
-                plt.xlabel(x_column)
-                plt.ylabel(y_column)
-                
-                # 그래프를 이미지 파일로 저장
-                output_file = f"C:/VS Code/Auto  Plot/png/category_{category[0]}_{category[1]}.png"
-                plt.savefig(output_file)
-                print(f"Saved graph as {output_file}")
-                
+
+                if x_column1 == 'BAND':
+                    if 'BAND' in filtered_data.columns:
+                        # 'BAND' 열이 존재하면 처리
+                        if filtered_data['BAND'].iloc[0] == 0:
+                            frequency = 2400
+                        elif filtered_data['BAND'].iloc[0] == 1:
+                            frequency = 2500
+                        elif filtered_data['BAND'].iloc[0] == 2:
+                            frequency = 5150
+                        # 나머지 BAND 값에 대한 처리 추가
+                        else:
+                            print(f"Unknown frequency for {category}, BAND: {filtered_data['BAND'].iloc[0]}")
+                            return
+                    else:
+                        print(f"'BAND' column does not exist in the data for category: {category}")
+                        return
+                    # 그래프 생성
+                    plt.figure()
+                    plt.scatter(frequency, filtered_data[y_column])
+                    plt.title(f"Category: {category}")
+                    plt.xlabel("Frequency")
+                    plt.ylabel("Value")
+
+                    # 그래프를 이미지 파일로 저장
+                    output_file = f"{output_directory}/{category}.png"
+                    plt.savefig(output_file)
+                    print(f"Saved graph as {output_file}")
+                else:
+                    print(f"Unknown BAND for {category}")
+                    return
+
+
             def plot_data():
+                # 사용자에게 출력 디렉토리 선택 대화상자를 통해 폴더 경로 선택하도록 함
+                output_directory = filedialog.askdirectory(title="Select Output Directory")
                 categories = []  # 카테고리 이름을 저장할 리스트
                 selected_values = {}  # 각 제목별로 선택한 값들을 저장
                 for title, values in data_dict.items():
@@ -102,10 +125,8 @@ def choose_csv_file():
                     categories.append(category)
                 # 각 카테고리 이름을 출력
                 for i, category in enumerate(categories):
-                    print(f"Category {i + 1}: {category}")    
-                    # print(df.head())
-                    create_and_save_graph(df, 'BAND', 'VALUE', category)
-                    # 그래프 생성 및 저장 함수 호출
+                    # print(f"Category {i + 1}: {category}")    
+                    create_and_save_graph(df, 'BAND', 'CH', 'VALUE', output_directory, category)
 
             plot_button = tk.Button(root, text="PLOT", command=plot_data)
             plot_button.grid(row=1, column=0)
