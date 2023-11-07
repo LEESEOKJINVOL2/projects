@@ -2,13 +2,21 @@ import tkinter as tk
 from tkinter import filedialog
 import csv
 from itertools import product
+import matplotlib.pyplot as plt
+import pandas as pd
+
+# 전역 변수로 df 선언
+df = None
 
 def choose_csv_file():
+    global df
+    
     # 파일 대화상자를 통해 CSV 파일 선택
     file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
 
     if file_path:
         # CSV 파일 열기
+        df = pd.read_csv(file_path)  # 데이터프레임에 CSV 파일 데이터 할당
         with open(file_path, 'r', newline='') as csv_file:
             csv_reader = csv.reader(csv_file)
             
@@ -20,7 +28,7 @@ def choose_csv_file():
             selected_data = {}  # 선택한 데이터를 저장하는 딕셔너리
             
             for title in header:
-                if title not in ["CH", "BAND","PAGAIN", "PWR_MODE", "TRASH", "LEVEL", "P/F", "NUMPACKET", "BLANK", "VALUE"]:
+                if title not in ["CH", "PAGAIN", "PWR_MODE", "TRASH", "LEVEL", "P/F", "NUMPACKET", "BLANK", "VALUE"]:
                     data_dict[title] = set()
                     selected_data[title] = set()  # 선택한 데이터를 저장하기 위해 초기화
             
@@ -61,9 +69,37 @@ def choose_csv_file():
                 list_box.pack(side="left", fill="y")
                 list_boxes[title] = list_box  # LabelFrame에 대한 딕셔너리 키 설정
                 show_data(title, list_box)  # 데이터를 초기에 출력
-            
-            # PLOT 버튼 추가
+                    
+            def create_and_save_graph(df, x_column, y_column, output_directory, category):
+                test_name, band, pkt_type = category.split('@')
+                filtered_data = df[(df['TEST_NAME'] == test_name) & (df['BAND'] == band) & (df['PKT_TYPE'] == pkt_type)]
+
+                print(filtered_data)
+                if pkt_type != 'LE':
+                    if len(filtered_data) == 0:
+                        print(f"No data for category: {category}")
+                        return
+
+                    # 그래프 생성
+                    plt.figure()
+                    plt.plot(filtered_data[x_column], filtered_data[y_column])
+                    print(filtered_data[x_column], filtered_data[y_column])
+                    plt.title(f"{category}")
+                    plt.xlabel("X")
+                    plt.ylabel("Y")
+                    plt.gca().invert_xaxis()  # x축 반전
+                    plt.grid(True)  # grid on
+                    plt.plot
+
+                    # 그래프를 이미지 파일로 저장
+                    output_file = f"{output_directory}/{category}.png"
+                    plt.savefig(output_file)
+                    print(f"Saved graph as {output_file}")
+
+
             def plot_data():
+                # 사용자에게 출력 디렉토리 선택 대화상자를 통해 폴더 경로 선택하도록 함
+                output_directory = filedialog.askdirectory(title="Select Output Directory")
                 categories = []  # 카테고리 이름을 저장할 리스트
                 selected_values = {}  # 각 제목별로 선택한 값들을 저장
                 for title, values in data_dict.items():
@@ -75,8 +111,9 @@ def choose_csv_file():
                     categories.append(category)
                 # 각 카테고리 이름을 출력
                 for i, category in enumerate(categories):
-                    print(f"Category {i + 1}: {category}")
-                
+                    # print(f"Category: {category}")    
+                    create_and_save_graph(df,'LEVEL', 'VALUE', output_directory, category)
+                    # 그래프 생성 및 저장 함수 호출
 
             plot_button = tk.Button(root, text="PLOT", command=plot_data)
             plot_button.grid(row=1, column=0)
