@@ -1,0 +1,33 @@
+※ RULE
+	해당하는 값이 없으면 SKIP
+	BAND에 '-999'는 SKIP
+	CH에 -999는 SKIP
+	PKT_TYPE에 LE는 SKIP
+
+※ Rx(TEST_NAME / BAND / CH / LEVEL / PKT_TYPE / VALUE)
+
+- summary
+	BDR(DH5) / EDR-2(2DH5) / EDR-3(3DH5)	BER만 봄
+	HDR-4 / HDR-8 / HDRP-4 / HDRP-8		PER
+	LE1M / LE2M				PER
+
+	LEVEL값에 따라 VALUE를 측정하는데 특정 LEVEL값에서 0이 아닌 VALUE가 나오고 그 시작점들을 연결한거
+	X축: BAND/CH = frequency
+	Y축: 측정 데이터에서 LIMIT을 넘어가는 LEVEL값의 바로 전
+
+- Rssi Error(rssi err + band / ch)
+
+	LEVEL에 따라 VALUE
+	spec에 맞춰서 span을 조절하고(대충 span +- 2)
+	X축: LEVEL
+	Y축: VALUE
+
+- Sensitivity (per or ber + band /ch)
+	BDR(DH5) / EDR-2(2DH5) / EDR-3(3DH5)	BER만 봄
+	HDR-4 / HDR-8 / HDRP-4 / HDRP-8		PER
+	LE1M / LE2M				PER
+
+	LEVEL에 따른 VALUE값
+	X축: LEVEL
+	Y축: VALUE
+
