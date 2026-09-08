@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Shared workspace configuration (2026-07-20 restructure). One config.xml
+for every project (BT_TX, NB_Tx, UWB, WIFI), replacing the earlier
+per-project files. See paths.py for how this is loaded.
+
+<paths> holds values every project shares (the customer spec workbook,
+the PPT template, the base report/result folders, extract_mode, and
+ate_log_path. ALL FOUR projects currently read the exact same physical
+ATE log file, so that's shared here too, not duplicated per project. Each
+project's own name gets appended to report_dir/result_png_dir/
+result_xlsx_dir automatically, never edited here.
+
+<projects> holds the one thing that genuinely differs per project: where
+its raw bench-measurement CSVs live (bench_dir, a real, different folder
+per project, e.g. Bench_40pcs/BT_Tx vs Bench_40pcs/NB_Tx, so this one can't
+move to <paths>). Add a new <projects><NAME> block here when a project's
+data location is known; until then its own folder stays empty.
+-->
+<config>
+  <paths>
+    <spec_workbook>Harald_P2_Test_Coverage_v4.4_JSCK.xlsx</spec_workbook>
+    <ppt_template>PPT-Template.pptx</ppt_template>
+    <!-- 2026-07-22: every project's PPT title slide now reads
+         "{title_prefix} {project name} {title_suffix}" (e.g. "Bench
+         NB_Tx Distribution", "Bench BT_TX Distribution"). Edit these
+         two here to change every deck's title slide text at once. -->
+    <title_prefix>Bench</title_prefix>
+    <title_suffix>Distribution</title_suffix>
+    <report_dir>report</report_dir>
+    <result_png_dir>result_png</result_png_dir>
+    <result_xlsx_dir>result_xlsx</result_xlsx_dir>
+    <!-- 2026-07-22: both/ate/bench, applies to every project. See
+         paths.py's extract_mode docstring. "both" runs the full pipeline;
+         "ate" skips regenerating Bench chart PNGs (reuses whatever's
+         already on disk); "bench" skips ATE extraction entirely and the
+         PPT shows every ATE cell as blank/"No ATE match". Moved here from
+         each project's own <options> block since one project asking for
+         "ate" while another still runs "both" was never a real use case. -->
+    <extract_mode>both</extract_mode>
+    <!-- 2026-07-22: moved here from each project's own <ate_log_path>.
+         ALL FOUR projects (BT_TX, NB_Tx, UWB, WIFI) read this exact same
+         physical ATE log file, per the customer's ATE test program
+         (BTTX_*/NBTX_*/UWBTX_*/WIFITX_* items all live in one CSV;
+         confirmed by explicit user correction 2026-07-24, replacing an
+         earlier mistaken split that gave UWB/WIFI their own separate
+         ate_log_path_uwb_wifi). A per-project copy of this value would be
+         pure duplication. Points at the exact FILE to use, not a folder.
+         Switching to a newer customer pull is a one-line edit here, no
+         renaming the new file to match a hardcoded name. A given data pull
+         may cover only SOME projects' items (e.g. the current file is an
+         8DH5 BT-only retest, so NB_Tx/UWB/WIFI all currently render
+         "No ATE match"). That's expected, not a bug. See paths.py's
+         docstring. -->
+    <!-- 2026-07-27: switched from the ate_32site pull to the ate_40pcs one
+         actually present in this workspace. Verified this single file carries
+         every project's items (BTTX_ 22146 / NBTX_ 48 / UWBTX_ 138 /
+         WIFITX_ 2413 rows), and that row 1 is a real "SerialNumber" header
+         with no leading metadata banner (43 cols = name + 2 limits + 40
+         DUTs), so no parser takes the ate_32site banner-row path. -->
+    <ate_log_path>C:\Users\seokjin.lee\Desktop\Harald_Correlation\rawdata\02.Rx\ATE\FullFlow_40pcs_SONY_with_NEWDECAL_(0824)_PKT_Updated_260824.csv</ate_log_path>
+  </paths>
+  <projects>
+    <BT_TX>
+      <report_dir_override>C:\Users\seokjin.lee\Desktop\Harald_Correlation\Report</report_dir_override>
+      <bench_dir>C:\Users\seokjin.lee\Desktop\Harald_Correlation\rawdata\01.Tx\Bench</bench_dir>
+      <!-- 2026-08-14: BT_TX-only override of the shared <paths><spec_workbook>
+           (NPI_TestCoverage_v0.4.xlsx). Points at the customer's new
+           workbook: covers Power ('TX Power Specification' sheet) plus
+           DEVM/ACP/FreqAcc (same 'BT - BDR & EDR Spec' / 'BT - BLE and HDT
+           Spec' / 'BT - HDR HDRP UHDR Spec' sheet names as before, updated
+           content). See paths.py's bt_tx_spec_workbook property. -->
+      <bt_tx_spec_workbook>Harald_P2_Test_Coverage_v4.4_JSCK.xlsx</bt_tx_spec_workbook>
+      <!-- 2026-07-21: ported from the colleague's own standalone
+           bt_tx_paths.py/config.xml during the BT_TX-ATE merge. Off by
+           default (write_xlsx) since the PPT builders never read the
+           per-combo XLSX; png_workers=5 parallelizes PNG generation via
+           ProcessPoolExecutor, lower it if this machine OOMs. -->
+      <options>
+        <write_xlsx>false</write_xlsx>
+        <png_workers>5</png_workers>
+      </options>
+    </BT_TX>
+    <NB_Tx>
+      <bench_dir>Bench_40pcs/NB_Tx</bench_dir>
+      <!-- 2026-07-27: png_workers added to every project (was BT_TX only).
+           See png_jobs.py: a pool only kicks in above MIN_PARALLEL jobs, so
+           a metric with just a handful of charts still renders serially and
+           never pays the ~3.1s-per-worker module-import cost. -->
+      <options>
+        <png_workers>5</png_workers>
+      </options>
+    </NB_Tx>
+    <UWB>
+      <!-- 2026-07-23: colleague-delivered ATE-integrated UWB pipeline
+           merged in from p1_correlation_uwb/. bench_dir corrected from the
+           old placeholder "Bench_40pcs/UWB" (didn't exist) to the real
+           folder name. ATE data comes from the shared <ate_log_path> in
+           <paths> above, same file every other project reads (2026-07-24). -->
+      <bench_dir>Bench_40pcs/UWB_Tx</bench_dir>
+      <!-- 2026-07-27: see NB_Tx's note above. Measured: UWB's chart steps are
+           6-38s each and mostly CSV-reading, with only a handful of PNGs per
+           metric, so most of them stay under png_jobs.MIN_PARALLEL and render
+           serially regardless of this value. That's intended, not a misread
+           setting. -->
+      <options>
+        <png_workers>5</png_workers>
+      </options>
+    </UWB>
+    <WIFI>
+      <!-- 2026-07-23: colleague-delivered ATE-integrated WiFi(WL_TX)
+           pipeline merged in from p1_correlation_wifi/; bench_dir was
+           already correct as a placeholder. ATE data comes from the
+           shared <ate_log_path> in <paths> above (2026-07-24). -->
+      <bench_dir>Bench_40pcs/WL_Tx</bench_dir>
+      <!-- 2026-07-27: see NB_Tx's note above. WIFI is where this actually
+           pays: its 7 chart steps are ~2min each with roughly half that spent
+           drawing (measured with the count_only flag), and every metric has
+           enough conditions x frequencies to clear MIN_PARALLEL. -->
+      <options>
+        <png_workers>5</png_workers>
+      </options>
+    </WIFI>
+    <BT_RX>
+      <report_dir_override>C:\Users\seokjin.lee\Desktop\Harald_Correlation\Report\Rx</report_dir_override>
+      <!-- 2026-08-14: new project, Bluetooth RX (RSSI / Sensitivity-PER /
+           Sensitivity-BER). 10-DUT dataset (not 40, unlike the other
+           projects): Bench_40pcs/Rx has 10 CSVs and the shared
+           ate_log_path CSV's BTRX_* rows also carry exactly 10 DUT columns.
+           ATE data comes from the same shared <ate_log_path> in <paths>
+           above, filtered to the BTRX_* item-name prefix. -->
+      <bench_dir>C:\Users\seokjin.lee\Desktop\Harald_Correlation\rawdata\02.Rx\Bench</bench_dir>
+      <options>
+        <png_workers>5</png_workers>
+      </options>
+    </BT_RX>
+    <Cal>
+      <!-- 2026-08-14: new project, Calibration. Bench log format is
+           different from every other project's wide-CSV-per-DUT layout:
+           Bench_40pcs/Cal has 10 "TNAME:"-row-style logs (ID,TEST_NAME,
+           RESULT_PB,LLIM,LLIM_TYPE,ULIM_TYPE,ULIM,P/F per row, one row per
+           test item), same item set/order across all 10 DUTs. Matches the
+           shared ate_log_path CSV's item names 1:1 by exact (stripped)
+           TEST_NAME string, unlike BT_TX/BT_RX/UWB/WIFI's own encoded/
+           prefixed item names. See Cal/make_cal_distribution.py. -->
+      <bench_dir>C:\Users\seokjin.lee\Desktop\Harald_Correlation\rawdata\00.PBCAL\Bench</bench_dir>
+      <options>
+        <png_workers>5</png_workers>
+      </options>
+    </Cal>
+    <Harald>
+      <!-- 2026-08-19: new project, HARALD device calibration data (see the
+           ATE log's own DeviceName/TestPGM columns: "HARALD",
+           "HARALD_x32_DC2_OTPON_FUSE.prog"). Same Bench log format as Cal
+           (TNAME:/PATNAME: rows), but the raw folder layout nests one level
+           deeper by vendor: Bench_40pcs/Harald/{Skyworks,Sony}/{DUT
+           serial}/*.csv, 20 DUTs each, 40 total. ATE data is NOT the
+           shared paths/ate_log_path file; it is its own two per-vendor
+           "transposed" CSVs (ate_40pcs/Harald/SSNJ_20pcs_transposed.csv is
+           Skyworks, SNKJ_20pcs_transposed.csv is Sony, matched by DUT
+           serial number, not by filename; SNKJ's columns are actually the
+           Sony DUTs). Per user decision 2026-08-19: pool all 40 DUTs
+           together with no vendor split, so the report reads exactly like
+           Cal's own (see Harald/make_harald_distribution.py, which reuses
+           Cal's generic build_jobs/build_pages/draw_png/read_ate
+           verbatim). -->
+      <bench_dir>Bench_40pcs/Harald</bench_dir>
+      <options>
+        <png_workers>5</png_workers>
+      </options>
+    </Harald>
+    <Harald_260820>
+      <report_dir_override>C:\Users\yoonji.kim\Testcode\p1_correlation\UI\report\ex</report_dir_override>
+      <!-- 2026-08-20: newer Harald retest pull, user-provided at
+           Downloads/"Harald_Cal data 40pcs_260820/...". Same TNAME:/
+           PATNAME: Bench row format as Cal/Harald, but the raw layout this
+           time is FLAT (Bench_40pcs/Harald_260820/*.csv, 40 files directly,
+           no {Skyworks,Sony} vendor subfolder split) and the ATE side is
+           ONE file (ate_40pcs/Harald_260820/CAL_Only_Bench40pcs_Retest0_
+           transposed.csv), not the original pull's two per-vendor files;
+           so this reads via Cal's own plain read_bench/read_ate directly
+           (see Harald/make_harald_260820_distribution.py), not the
+           vendor-nested read_bench_harald/read_ate_harald the original
+           Harald project entry above needs. Kept as its own project entry
+           (not overwriting <Harald>) so the original pull's report stays
+           reproducible from the original raw data. -->
+      <bench_dir>C:\Users\seokjin.lee\Desktop\Harald_Correlation\rawdata\00.PBCAL\Bench</bench_dir>
+      <options>
+        <png_workers>5</png_workers>
+      </options>
+    </Harald_260820>
+    <!-- BT_TX_TRIMTEST project entry removed 2026-08-19: the FWBT trim-test
+         report (Cal/build_ppt_fwbt_trimtest_revision1.py) now runs under
+         get_paths("Cal") directly, since its data always was a subset of
+         Cal's own Bench/ATE data (see that script's docstring); keeping a
+         separate project block just for a bench_dir override identical to
+         Cal's own was pointless once its source files also moved into
+         Cal/. -->
+  </projects>
+</config>
