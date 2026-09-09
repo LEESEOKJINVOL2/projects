@@ -1,0 +1,3 @@
+HDT2 | Carrier Frequency Offset | min=-125.0 max=125.0
+HDT4 | Carrier Frequency Offset | min=-125.0 max=125.0
+HDT6 | Carrier Frequency Offset | min=-125.0 max=125.0

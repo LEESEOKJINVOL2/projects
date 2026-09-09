@@ -1,0 +1,149 @@
+"""Harald (HARALD device calibration) distribution histograms -- Bench + ATE,
+same visual/report format as make_harald_distribution.py, per user request
+2026-08-20: a newer Harald retest pull at Bench_40pcs/Harald_260820 +
+ate_40pcs/Harald_260820 (user-provided, originally at Downloads/"Harald_Cal
+data 40pcs_260820/...").
+
+Unlike the original Harald pull (Bench_40pcs/Harald/{Skyworks,Sony}/{DUT
+serial}/*.csv nested by vendor, ATE split across two per-vendor "transposed"
+CSVs -- see make_harald_distribution.py's docstring), this retest pull's raw
+layout is FLAT: Bench_40pcs/Harald_260820/*.csv (40 files directly, no vendor
+subfolder) and ONE ATE file (ate_40pcs/Harald_260820/CAL_Only_Bench40pcs_
+Retest0_transposed.csv) -- i.e. the exact same shape Cal/make_cal_
+distribution.py's own read_bench/read_ate already expect, so this file reads
+via THOSE directly (unmodified) instead of needing its own vendor-aware
+readers the way make_harald_distribution.py did.
+
+Item names get the same clean()/DROP_TOKENS cleanup as the original Harald
+report and FWBT_TRIMTEST (own copy here, not imported, matching that
+precedent). Y-axis range stays PER-ITEM (cal._shared_range, Bench vs ATE for
+just that one item), not page-shared -- the original Harald report's own
+finding (98% of multi-item PATNAME pages had unrelated-scale items when a
+shared range was tried) applies here too, same PATNAME-section grouping.
+
+CLI: --limit N (first N qualifying items only), --count-only (print the
+qualify/match audit without drawing anything).
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
+
+_THIS_DIR = Path(__file__).resolve().parent
+_BASE_DIR = _THIS_DIR.parent
+sys.path.insert(0, str(_BASE_DIR))
+sys.path.insert(0, str(_BASE_DIR / "Cal"))
+
+import paths as harald_paths
+import make_cal_distribution as cal  # read_bench/read_ate/build_jobs/build_pages/draw_png/etc. (reused, not modified)
+
+PATHS = harald_paths.get_paths("Harald_260820")
+# 2026-08-21: ATE re-pull replaced the old "CAL_Only_Bench40pcs_Retest0_
+# transposed.csv" (no longer present on disk) -- same header shape
+# (SerialNumber,Upper Limit,Lower Limit,<DUT...>), same 40 DUT serials,
+# just a different measurement condition ("withoutKGD, new CW table").
+# Same fix already applied to Harald/make_harald_trimtest_distribution.py.
+ATE_PATH = Path(r"C:\Users\seokjin.lee\Desktop\Harald_Correlation\rawdata\00.PBCAL\ATE")
+
+# -- item-name cleanup, same DROP_TOKENS/NV_VXXX-suffix logic as
+# make_harald_distribution.clean()/Cal/make_bt_tx_trimtest_distribution.py's
+# clean() -- kept as its own copy here per that precedent (one-off display
+# transform, not shared pipeline logic). --
+DROP_TOKENS = {"X", "ATE", "NVVS"}
+
+
+def clean(name: str) -> str:
+    parts = name.split("_")
+    if len(parts) >= 2 and parts[-2] == "NV" and parts[-1] == "VXXX":
+        parts = parts[:-2]
+    parts = [p for p in parts if p not in DROP_TOKENS]
+    return "_".join(parts)
+
+
+def _draw_one(job):
+    """Same as make_harald_distribution._draw_one -- title uses the cleaned
+    name, value_range stays per-item (not page-shared, see module
+    docstring)."""
+    name = job["name"]
+    title = f"Harald_{job['cleaned_name']}"
+    figsize = cal.figure_size_for(job["n_cols"])
+
+    llim, ulim = cal.effective_spec(job)
+    value_range = cal._shared_range(job["bench_values"], job["ate_values"], llim, ulim)
+
+    cal.draw_png(job["bench_values"], title, "Value", job["bench_png"], value_range=value_range,
+                 spec=(job["bench_llim"], job["bench_ulim"]), figsize=figsize)
+
+    if job["ate_values"] is not None:
+        cal.draw_png(job["ate_values"], "ATE_" + title, "Value", job["ate_png"], value_range=value_range,
+                     spec=(llim, ulim), figsize=figsize)
+    return name, job["ate_values"] is not None
+
+
+def bench_png_dir() -> Path:
+    return PATHS.result_png_dir / "harald_260820_distribution"
+
+
+def ate_png_dir() -> Path:
+    return PATHS.result_png_dir.parent / "Harald_260820_ATE" / "harald_260820_distribution"
+
+
+def parse_args():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--limit", type=int, default=0, help="only draw the first N qualifying items")
+    p.add_argument("--count-only", action="store_true", help="print the qualify/match audit only")
+    return p.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    print("Reading Bench_Harald_260820 CSVs...")
+    bench_items = cal.read_bench(PATHS.bench_dir)
+    print(f"  {len(bench_items)} test item(s) found")
+
+    print(f"Parsing ATE log ({ATE_PATH.name})...")
+    ate_items = cal.read_ate_auto(ATE_PATH)  # ATE_PATH may be one file or a folder of per-config files
+
+    jobs, n_no_ate = cal.build_jobs(bench_items, ate_items)
+    print(f"\n=== items with >=1 Bench limit: {len(jobs)}/{len(bench_items)} "
+          f"(ATE match: {len(jobs) - n_no_ate}, no ATE match: {n_no_ate}) ===")
+
+    if args.count_only:
+        return
+
+    if args.limit > 0:
+        jobs = jobs[: args.limit]
+        print(f"Limiting to first {len(jobs)} item(s)")
+
+    for job in jobs:
+        job["cleaned_name"] = clean(job["name"])
+
+    for page in cal.build_pages(jobs):
+        for job in page["jobs"]:
+            job["n_cols"] = len(page["jobs"])
+
+    bench_dir_out = bench_png_dir()
+    ate_dir_out = ate_png_dir()
+    bench_dir_out.mkdir(parents=True, exist_ok=True)
+    ate_dir_out.mkdir(parents=True, exist_ok=True)
+
+    for job in jobs:
+        fname = cal.safe_filename(job["cleaned_name"])
+        job["bench_png"] = bench_dir_out / f"{fname}.png"
+        job["ate_png"] = ate_dir_out / f"{fname}.png"
+
+    n = 0
+    with ProcessPoolExecutor(max_workers=PATHS.png_workers) as pool:
+        for name, has_ate in pool.map(_draw_one, jobs, chunksize=20):
+            n += 1
+            if n % 200 == 0 or n == len(jobs):
+                print(f"  [{n}/{len(jobs)}] {name}  (ATE: {'yes' if has_ate else 'no'})")
+
+    print(f"\nDone. Bench PNG -> {bench_dir_out}")
+    print(f"      ATE   PNG -> {ate_dir_out}")
+
+
+if __name__ == "__main__":
+    main()
